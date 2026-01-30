@@ -7,5 +7,6 @@ export default defineConfig({
   format: ['esm', 'cjs'],
   sourcemap: true,
   minify: true,
-  treeshake: true
+  treeshake: true,
+  external: ['react', 'react-dom', 'react/jsx-runtime'],
 });
