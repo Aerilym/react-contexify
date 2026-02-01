@@ -71,8 +71,8 @@ export interface MenuProps
    * - For the true case use `onShow`.
    * NOTE: `onShow` behaves slightly differently. `onVisibilityChange` would trigger
    * with `isVisible=true` only when transitioning from hidden to shown, this meant
-   * if the same context menu was re-triggered from a new position the event
-   * would not emit, so there was no way to know if the menu moved. These new events
+   * if the same context menu was re-triggered from a new position the callback would
+   * not trigger, so there was no way to know if the menu moved. These new events
    * trigger regardless of current state and mirror the context menu events. This
    * means you can now get `onShow`, `onShow`, then `onHide` if you open a context menu,
    * move it, then click away.
@@ -89,9 +89,11 @@ export interface MenuProps
   onShow?: (fromHidden: boolean) => void;
 
   /**
-   * Triggers when a hide event is triggered if the menu is currently shown.
+   * Triggers when a hide event is triggered. This triggers even if the menu
+   * is already hidden.
+   * @param fromVisible - True if the menu was previously visible.
    */
-  onHide?: () => void;
+  onHide?: (fromVisible: boolean) => void;
 }
 
 interface MenuState {
@@ -140,7 +142,7 @@ export const Menu = ({
   const wasVisible = useRef<boolean>(false);
 
   // @deprecated --  NOTE: this is to keep backwards compatibility for onVisibilityChange
-  const wasVisibleDepricated = useRef<boolean>(false);
+  const wasVisibleDeprecated = useRef<boolean>(false);
   // @deprecated
   const visibilityId = useRef<number>(0);
 
@@ -251,18 +253,19 @@ export const Menu = ({
 
 
     if (isFn(onShow)) {
-      onShow(!wasVisible.current)
+      onShow(!wasVisible.current);
     }
 
     if (!wasVisible.current) {
-      wasVisible.current = true
+      wasVisible.current = true;
     }
 
     // TODO: remove deprecated functionality
     if (isFn(onVisibilityChange)) {
       clearTimeout(visibilityId.current);
-      if (!wasVisibleDepricated.current) {
+      if (!wasVisibleDeprecated.current) {
         onVisibilityChange(true);
+        wasVisibleDeprecated.current = true;
       }
     }
   }
@@ -286,7 +289,7 @@ export const Menu = ({
       }));
 
     if (isFn(onHide)) {
-      onHide();
+      onHide(wasVisible.current);
     }
 
     wasVisible.current = false;
@@ -295,7 +298,7 @@ export const Menu = ({
     if (isFn(onVisibilityChange)) {
       visibilityId.current = setTimeout(() => {
         onVisibilityChange(false);
-        wasVisibleDepricated.current = false;
+        wasVisibleDeprecated.current = false;
       });
     }
   }

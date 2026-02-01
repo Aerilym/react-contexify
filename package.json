@@ -37,8 +37,8 @@
     "style2js": "style2js --out-dir dist dist/ReactContexify.min.css"
   },
   "peerDependencies": {
-    "react": ">=19",
-    "react-dom": ">=19"
+    "react": "^16 || ^17 || ^18 || ^19",
+    "react-dom": "^16 || ^17 || ^18 || ^19"
   },
   "prettier": {
     "printWidth": 80,
