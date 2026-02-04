@@ -12,7 +12,7 @@ import cx from 'clsx';
 import { ItemTrackerProvider } from './ItemTrackerProvider';
 
 import { eventManager } from '../core/eventManager';
-import { TriggerEvent, MenuId, MenuAnimation, Theme } from '../types';
+import { TriggerEvent, MenuId, MenuAnimation, Theme, MenuOnShowCallback, MenuOnHideCallback, StyleMargin, StyleMarginObject } from '../types';
 import { useItemTracker } from '../hooks';
 import { createKeyboardController } from './keyboardController';
 import { CssClass, EVENT, hideOnEvents } from '../constants';
@@ -40,6 +40,14 @@ export interface MenuProps
    * Built-in theme are `light` and `dark`
    */
   theme?: Theme;
+
+  /**
+   * Apply a margin to the viewport for boundary detection. If a context menu
+   * would appear within this viewport margin it counts as being outside the
+   * viewport and moves within the margin limits.
+   * This only works if `disableBoundariesCheck` is not true.
+   */
+  viewportMargin?: StyleMargin;
 
   /**
    * Animation is appended to
@@ -85,15 +93,16 @@ export interface MenuProps
    * Triggers when a show event is triggered. This triggers even if the menu
    * is already shown.
    * @param fromHidden - True if the menu was previously hidden.
+   * @param position - An object of `{x: number, y:number}` for the position the
+   * context menu is appearing.
    */
-  onShow?: (fromHidden: boolean) => void;
-
+  onShow?: MenuOnShowCallback;
   /**
    * Triggers when a hide event is triggered. This triggers even if the menu
    * is already hidden.
    * @param fromVisible - True if the menu was previously visible.
    */
-  onHide?: (fromVisible: boolean) => void;
+  onHide?: MenuOnHideCallback;
 }
 
 interface MenuState {
@@ -122,6 +131,7 @@ export const Menu = ({
   animation = 'fade',
   preventDefaultOnKeydown = true,
   disableBoundariesCheck = false,
+  viewportMargin = 0,
   onShow,
   onHide,
   onVisibilityChange,
@@ -140,11 +150,13 @@ export const Menu = ({
   const [menuController] = useState(() => createKeyboardController());
 
   const wasVisible = useRef<boolean>(false);
+  const viewPortMargin = useRef<StyleMarginObject>(typeof viewportMargin === 'number' ? { bottom: viewportMargin, top: viewportMargin, left: viewportMargin, right: viewportMargin } : viewportMargin)
 
   // @deprecated --  NOTE: this is to keep backwards compatibility for onVisibilityChange
   const wasVisibleDeprecated = useRef<boolean>(false);
   // @deprecated
   const visibilityId = useRef<number>(0);
+
 
   // allows the caller to assign their own ref, which is then synced with nodeRef
   useImperativeHandle(ref, () => nodeRef.current as HTMLDivElement);
@@ -169,9 +181,14 @@ export const Menu = ({
       const { innerWidth, innerHeight } = window;
       const { offsetWidth, offsetHeight } = nodeRef.current;
 
-      if (x + offsetWidth > innerWidth) x -= x + offsetWidth - innerWidth;
+      const xMax = innerWidth - (viewPortMargin.current?.right ?? 0);
+      // const xMin = viewPortMargin.current.left;
+      const yMax = innerHeight - (viewPortMargin.current?.bottom ?? 0);
+      // const yMin = viewPortMargin.current.top;
 
-      if (y + offsetHeight > innerHeight) y -= y + offsetHeight - innerHeight;
+      if (x + offsetWidth > xMax) x -= x + offsetWidth - xMax;
+
+      if (y + offsetHeight > yMax) y -= y + offsetHeight - yMax;
     }
 
     return { x, y };
@@ -253,7 +270,7 @@ export const Menu = ({
 
 
     if (isFn(onShow)) {
-      onShow(!wasVisible.current);
+      onShow(!wasVisible.current, { x, y });
     }
 
     if (!wasVisible.current) {
