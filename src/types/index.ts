@@ -97,10 +97,10 @@ export type PredicateParams<Props = any, Data = any> = HandlerParams<
 export interface ItemParams<Props = any, Data = any>
   extends HandlerParams<Props, Data> {
   event:
-    | React.MouseEvent<HTMLElement>
-    | React.TouchEvent<HTMLElement>
-    | React.KeyboardEvent<HTMLElement>
-    | KeyboardEvent;
+  | React.MouseEvent<HTMLElement>
+  | React.TouchEvent<HTMLElement>
+  | React.KeyboardEvent<HTMLElement>
+  | KeyboardEvent;
 }
 
 export interface InternalProps {
@@ -139,3 +139,9 @@ export type MenuAnimation =
   | { enter: Animation | false; exit: Animation | false };
 
 type Animation = BuiltInOrString<'fade' | 'scale' | 'flip' | 'slide'>;
+
+export type Position = { x: number, y: number };
+export type MenuOnShowCallback = (fromHidden: boolean, position: Position) => void;
+export type MenuOnHideCallback = (fromVisible: boolean) => void;
+export type StyleMarginObject = { top?: number, bottom?: number, left?: number, right?: number }
+export type StyleMargin = number | StyleMarginObject

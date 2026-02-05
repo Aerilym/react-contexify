@@ -1,6 +1,8 @@
 import React, {
   ReactNode,
+  Ref,
   useEffect,
+  useImperativeHandle,
   useReducer,
   useRef,
   useState,
@@ -10,7 +12,7 @@ import cx from 'clsx';
 import { ItemTrackerProvider } from './ItemTrackerProvider';
 
 import { eventManager } from '../core/eventManager';
-import { TriggerEvent, MenuId, MenuAnimation, Theme } from '../types';
+import { TriggerEvent, MenuId, MenuAnimation, Theme, MenuOnShowCallback, MenuOnHideCallback, StyleMargin, StyleMarginObject } from '../types';
 import { useItemTracker } from '../hooks';
 import { createKeyboardController } from './keyboardController';
 import { CssClass, EVENT, hideOnEvents } from '../constants';
@@ -20,6 +22,8 @@ import { ShowContextMenuParams } from '../core';
 
 export interface MenuProps
   extends Omit<React.HTMLAttributes<HTMLElement>, 'id'> {
+
+  ref?: Ref<HTMLDivElement>;
   /**
    * Unique id to identify the menu. Use to Trigger the corresponding menu
    */
@@ -36,6 +40,14 @@ export interface MenuProps
    * Built-in theme are `light` and `dark`
    */
   theme?: Theme;
+
+  /**
+   * Apply a margin to the viewport for boundary detection. If a context menu
+   * would appear within this viewport margin it counts as being outside the
+   * viewport and moves within the margin limits.
+   * This only works if `disableBoundariesCheck` is not true.
+   */
+  viewportMargin?: StyleMargin;
 
   /**
    * Animation is appended to
@@ -62,8 +74,35 @@ export interface MenuProps
 
   /**
    * Used to track menu visibility
+   * @deprecated -- May be removed in the next major version
+   * - For the false case use `onHide`.
+   * - For the true case use `onShow`.
+   * NOTE: `onShow` behaves slightly differently. `onVisibilityChange` would trigger
+   * with `isVisible=true` only when transitioning from hidden to shown, this meant
+   * if the same context menu was re-triggered from a new position the callback would
+   * not trigger, so there was no way to know if the menu moved. These new events
+   * trigger regardless of current state and mirror the context menu events. This
+   * means you can now get `onShow`, `onShow`, then `onHide` if you open a context menu,
+   * move it, then click away.
+   * For the same behaviour `onShow` has a `fromHidden` parameter which is only true
+   * if the menu was previously in a hidden state.
    */
   onVisibilityChange?: (isVisible: boolean) => void;
+
+  /**
+   * Triggers when a show event is triggered. This triggers even if the menu
+   * is already shown.
+   * @param fromHidden - True if the menu was previously hidden.
+   * @param position - An object of `{x: number, y:number}` for the position the
+   * context menu is appearing.
+   */
+  onShow?: MenuOnShowCallback;
+  /**
+   * Triggers when a hide event is triggered. This triggers even if the menu
+   * is already hidden.
+   * @param fromVisible - True if the menu was previously visible.
+   */
+  onHide?: MenuOnHideCallback;
 }
 
 interface MenuState {
@@ -82,8 +121,9 @@ function reducer(
   return { ...state, ...(isFn(payload) ? payload(state) : payload) };
 }
 
-export const Menu: React.FC<MenuProps> = ({
+export const Menu = ({
   id,
+  ref,
   theme,
   style,
   className,
@@ -91,9 +131,12 @@ export const Menu: React.FC<MenuProps> = ({
   animation = 'fade',
   preventDefaultOnKeydown = true,
   disableBoundariesCheck = false,
+  viewportMargin = 0,
+  onShow,
+  onHide,
   onVisibilityChange,
   ...rest
-}) => {
+}: MenuProps) => {
   const [state, setState] = useReducer(reducer, {
     x: 0,
     y: 0,
@@ -105,8 +148,18 @@ export const Menu: React.FC<MenuProps> = ({
   const nodeRef = useRef<HTMLDivElement>(null);
   const itemTracker = useItemTracker();
   const [menuController] = useState(() => createKeyboardController());
-  const wasVisible = useRef<boolean>();
-  const visibilityId = useRef<number>();
+
+  const wasVisible = useRef<boolean>(false);
+  const viewPortMargin = useRef<StyleMarginObject>(typeof viewportMargin === 'number' ? { bottom: viewportMargin, top: viewportMargin, left: viewportMargin, right: viewportMargin } : viewportMargin)
+
+  // @deprecated --  NOTE: this is to keep backwards compatibility for onVisibilityChange
+  const wasVisibleDeprecated = useRef<boolean>(false);
+  // @deprecated
+  const visibilityId = useRef<number>(0);
+
+
+  // allows the caller to assign their own ref, which is then synced with nodeRef
+  useImperativeHandle(ref, () => nodeRef.current as HTMLDivElement);
 
   // subscribe event manager
   useEffect(() => {
@@ -128,9 +181,14 @@ export const Menu: React.FC<MenuProps> = ({
       const { innerWidth, innerHeight } = window;
       const { offsetWidth, offsetHeight } = nodeRef.current;
 
-      if (x + offsetWidth > innerWidth) x -= x + offsetWidth - innerWidth;
+      const xMax = innerWidth - (viewPortMargin.current?.right ?? 0);
+      // const xMin = viewPortMargin.current.left;
+      const yMax = innerHeight - (viewPortMargin.current?.bottom ?? 0);
+      // const yMin = viewPortMargin.current.top;
 
-      if (y + offsetHeight > innerHeight) y -= y + offsetHeight - innerHeight;
+      if (x + offsetWidth > xMax) x -= x + offsetWidth - xMax;
+
+      if (y + offsetHeight > yMax) y -= y + offsetHeight - yMax;
     }
 
     return { x, y };
@@ -210,10 +268,22 @@ export const Menu: React.FC<MenuProps> = ({
       });
     });
 
-    clearTimeout(visibilityId.current);
-    if (!wasVisible.current && isFn(onVisibilityChange)) {
-      onVisibilityChange(true);
+
+    if (isFn(onShow)) {
+      onShow(!wasVisible.current, { x, y });
+    }
+
+    if (!wasVisible.current) {
       wasVisible.current = true;
+    }
+
+    // TODO: remove deprecated functionality
+    if (isFn(onVisibilityChange)) {
+      clearTimeout(visibilityId.current);
+      if (!wasVisibleDeprecated.current) {
+        onVisibilityChange(true);
+        wasVisibleDeprecated.current = true;
+      }
     }
   }
 
@@ -232,13 +302,22 @@ export const Menu: React.FC<MenuProps> = ({
     animation && (isStr(animation) || ('exit' in animation && animation.exit))
       ? setState((state) => ({ willLeave: state.visible }))
       : setState((state) => ({
-          visible: state.visible ? false : state.visible,
-        }));
+        visible: state.visible ? false : state.visible,
+      }));
 
-    visibilityId.current = setTimeout(() => {
-      isFn(onVisibilityChange) && onVisibilityChange(false);
-      wasVisible.current = false;
-    });
+    if (isFn(onHide)) {
+      onHide(wasVisible.current);
+    }
+
+    wasVisible.current = false;
+
+    // TODO: remove deprecated functionality
+    if (isFn(onVisibilityChange)) {
+      visibilityId.current = setTimeout(() => {
+        onVisibilityChange(false);
+        wasVisibleDeprecated.current = false;
+      });
+    }
   }
 
   function handleAnimationEnd() {
@@ -300,4 +379,4 @@ export const Menu: React.FC<MenuProps> = ({
       )}
     </ItemTrackerProvider>
   );
-};
+}

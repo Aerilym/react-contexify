@@ -37,8 +37,8 @@
     "style2js": "style2js --out-dir dist dist/ReactContexify.min.css"
   },
   "peerDependencies": {
-    "react": ">=16",
-    "react-dom": ">=16"
+    "react": "^16 || ^17 || ^18 || ^19",
+    "react-dom": "^16 || ^17 || ^18 || ^19"
   },
   "prettier": {
     "printWidth": 80,
@@ -66,15 +66,15 @@
     "popup"
   ],
   "devDependencies": {
-    "@types/react": "^18.0.25",
-    "@types/react-dom": "^18.0.8",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "cssnano": "^5.1.14",
     "cssnano-cli": "^1.0.5",
     "cypress": "^11.0.1",
     "postcss": "^8.4.18",
     "postcss-cli": "^10.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
     "sass": "^1.56.1",
     "style2js": "^1.0.1",
     "tsup": "^6.4.0",
